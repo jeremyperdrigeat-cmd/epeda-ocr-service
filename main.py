@@ -281,6 +281,7 @@ def tesseract_cli_variants(image_path):
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                timeout=55,
             )
             variants.append(result.stdout.decode("utf-8", errors="replace"))
         except Exception:
@@ -294,10 +295,11 @@ def convert_pdf_to_image_paths(pdf_bytes: bytes, tmp: str):
     with open(pdf_path, "wb") as handle:
         handle.write(pdf_bytes)
     subprocess.run(
-        ["pdftoppm", "-r", "300", "-png", pdf_path, out_prefix],
+        ["pdftoppm", "-r", "300", "-png", "-f", "1", "-l", "3", pdf_path, out_prefix],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        timeout=25,
     )
     return [
         os.path.join(tmp, filename)
@@ -323,7 +325,7 @@ def extract_pdf(payload: ExtractRequest):
     if not pdf_bytes:
       raise HTTPException(status_code=400, detail="PDF absent")
 
-    proforma_rows = extract_structured_proforma(pdf_bytes)
+    proforma_rows = []
 
     pages = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -343,21 +345,7 @@ def extract_pdf(payload: ExtractRequest):
 
       for index, image_path in enumerate(image_paths, start=1):
         variants = tesseract_cli_variants(image_path)
-        with Image.open(image_path) as image:
-          if not variants:
-            for psm in ("6", "11", "4"):
-              variants.append(
-                pytesseract.image_to_string(
-                  image,
-                  lang=os.environ.get("OCR_LANG", "fra"),
-                  config=f"--psm {psm} preserve_interword_spaces=1",
-                )
-              )
-          data_lines = ocr_lines_from_data(image)
-        variants.append("\n".join(data_lines))
-        proforma_rows.extend(parse_proforma_lines(data_lines, index))
         for variant in variants:
-          proforma_rows.extend(parse_proforma_lines(variant.splitlines(), index))
           proforma_rows.extend(parse_proforma_table_from_text(variant, index))
         pages.append(best_ocr_variant(variants))
 
