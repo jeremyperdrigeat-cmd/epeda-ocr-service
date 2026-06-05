@@ -222,19 +222,17 @@ def best_ocr_variant(variants):
 
 def tesseract_cli_variants(image_path):
     variants = []
-    lang_candidates = [os.environ.get("OCR_LANG", "fra+eng"), "fra+eng", "fra", "eng"]
-    for lang in dict.fromkeys(lang_candidates):
-        for psm in ("6", "11", "4"):
-            try:
-                result = subprocess.run(
-                    ["tesseract", image_path, "stdout", "-l", lang, "--psm", psm, "preserve_interword_spaces=1"],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
-                variants.append(result.stdout.decode("utf-8", errors="replace"))
-            except Exception:
-                continue
+    for psm in ("6", "11", "4"):
+        try:
+            result = subprocess.run(
+                ["tesseract", image_path, "stdout", "-l", "fra+eng", "--psm", psm, "preserve_interword_spaces=1"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            variants.append(result.stdout.decode("utf-8", errors="replace"))
+        except Exception:
+            continue
     return variants
 
 
