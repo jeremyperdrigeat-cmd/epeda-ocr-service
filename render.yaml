@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: epeda-ocr-service
+    env: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://cofel-transport-control.vercel.app,http://127.0.0.1:5173
+      - key: OCR_LANG
+        value: fra
