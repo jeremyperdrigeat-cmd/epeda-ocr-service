@@ -181,6 +181,58 @@ def parse_proforma_lines(lines, page_index: int):
     return rows
 
 
+def proforma_trip_from_line(line: str):
+    raw = line or ""
+    if re.search(r"total|surtaxe|gasoil|gazole|commentaire|contrat|proforma|facturation", raw, re.I):
+        return None
+    if re.search(r"\d+[,.]\s*\d{5,6}\b", raw):
+        return None
+    match = re.match(r"^\s*(\d{2,3})\s+(\d{3})\b", raw) or re.match(r"^\s*(\d{6})\b", raw)
+    if not match:
+        return None
+    return "".join(group for group in match.groups() if group)
+
+
+def parse_proforma_table_from_text(text: str, page_index: int):
+    lines = [(line or "").strip() for line in (text or "").splitlines() if (line or "").strip()]
+    rows = []
+    current = None
+
+    def flush():
+        if not current:
+            return
+        block_text = " ".join(current["lines"])
+        if re.search(r"total|surtaxe|gasoil|gazole", block_text, re.I):
+            return
+        amount = text_amounts(block_text)
+        if amount is None:
+            return
+        date_match = re.search(r"\b\d{2}/\d{2}/\d{4}\b", block_text)
+        rows.append(
+            {
+                "trip": current["trip"],
+                "date": date_match.group(0) if date_match else "",
+                "expected": amount,
+                "raw": block_text,
+                "page": page_index,
+            }
+        )
+
+    for line in lines:
+        trip = proforma_trip_from_line(line)
+        if trip:
+            flush()
+            current = {"trip": trip, "lines": [line]}
+        elif current:
+            if re.search(r"^total\b|surtaxe|gasoil|gazole|commentaire", line, re.I):
+                flush()
+                current = None
+            else:
+                current["lines"].append(line)
+    flush()
+    return rows
+
+
 def ocr_lines_from_data(image):
     try:
         data = pytesseract.image_to_data(
@@ -306,6 +358,7 @@ def extract_pdf(payload: ExtractRequest):
         proforma_rows.extend(parse_proforma_lines(data_lines, index))
         for variant in variants:
           proforma_rows.extend(parse_proforma_lines(variant.splitlines(), index))
+          proforma_rows.extend(parse_proforma_table_from_text(variant, index))
         pages.append(best_ocr_variant(variants))
 
     text = "\n".join(pages)
